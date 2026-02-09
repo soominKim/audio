@@ -1,17 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
+import { RecordingSession } from "../types/recording";
 
 interface ResultViewProps {
   transcript: string;
+  duration: string;
   onNewRecording: () => void;
   language: string;
+  history: RecordingSession[];
 }
 
 const ResultView: React.FC<ResultViewProps> = ({
   transcript,
+  duration,
   onNewRecording,
   language,
+  history,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -19,6 +24,28 @@ const ResultView: React.FC<ResultViewProps> = ({
     navigator.clipboard.writeText(transcript);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return formatDate(dateString);
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -38,18 +65,11 @@ const ResultView: React.FC<ResultViewProps> = ({
           <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Voice Record</h1>
         </div>
 
-        {/* Language Toggle (Display only for now or functional?) - Screen 3 has a language toggle, maybe for translation?
-            For now I'll just show the recorded language.
-        */}
+        {/* Language Toggle */}
         <div className="bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-full flex items-center">
           <button className="px-6 py-2 rounded-full text-sm font-semibold bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white transition-all">
               {language === 'ko-KR' ? '한국어' : 'English (US)'}
           </button>
-          {/*
-          <button className="px-6 py-2 rounded-full text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">
-              Translation
-          </button>
-          */}
         </div>
 
         <div className="flex items-center gap-4">
@@ -85,12 +105,11 @@ const ResultView: React.FC<ResultViewProps> = ({
               <span className="material-symbols-outlined text-[18px]">calendar_today</span>
               <span>{new Date().toLocaleDateString()}</span>
             </div>
-            {/*
+
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px]">timer</span>
-              <span>2:45 Record Duration</span>
+              <span>{duration} Record Duration</span>
             </div>
-            */}
           </div>
         </div>
 
@@ -134,47 +153,34 @@ const ResultView: React.FC<ResultViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Mini Card 1 */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-lg apple-shadow border border-slate-50 dark:border-slate-800 flex flex-col gap-4">
-              <div className="flex justify-between items-start">
-                <div className="size-10 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary">description</span>
+            {history.length === 0 ? (
+                <div className="col-span-full py-10 flex flex-col items-center justify-center text-slate-400">
+                    <span className="material-symbols-outlined text-4xl mb-2">history</span>
+                    <p>No recent recordings found</p>
                 </div>
-                <span className="text-xs font-bold text-slate-400 uppercase">2 days ago</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white line-clamp-1">Project Sync Ideas</h4>
-                <p className="text-sm text-slate-500 line-clamp-2 mt-1">Discussing the roadmap for the next quarter and resource allocation...</p>
-              </div>
-            </div>
-
-            {/* Mini Card 2 */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-lg apple-shadow border border-slate-50 dark:border-slate-800 flex flex-col gap-4">
-              <div className="flex justify-between items-start">
-                <div className="size-10 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary">description</span>
-                </div>
-                <span className="text-xs font-bold text-slate-400 uppercase">1 week ago</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white line-clamp-1">Grocery List & Meal Plan</h4>
-                <p className="text-sm text-slate-500 line-clamp-2 mt-1">Need to pick up spinach, organic eggs, and whole grain bread...</p>
-              </div>
-            </div>
-
-            {/* Mini Card 3 */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-lg apple-shadow border border-slate-50 dark:border-slate-800 flex flex-col gap-4">
-              <div className="flex justify-between items-start">
-                <div className="size-10 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary">description</span>
-                </div>
-                <span className="text-xs font-bold text-slate-400 uppercase">2 weeks ago</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white line-clamp-1">Interview Transcript</h4>
-                <p className="text-sm text-slate-500 line-clamp-2 mt-1">Q: Tell me about your experience with AI integration in workflows...</p>
-              </div>
-            </div>
+            ) : (
+                history.map((session) => (
+                    <div key={session.id} className="bg-white dark:bg-slate-900 p-6 rounded-lg apple-shadow border border-slate-50 dark:border-slate-800 flex flex-col gap-4 hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start">
+                        <div className="size-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <span className="material-symbols-outlined text-primary">description</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">{formatTimeAgo(session.date)}</span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 dark:text-white line-clamp-1">
+                            {session.transcript ? session.transcript.substring(0, 30) + (session.transcript.length > 30 ? '...' : '') : 'Untitled Recording'}
+                        </h4>
+                        <p className="text-sm text-slate-500 line-clamp-2 mt-1">
+                            {session.transcript || "No content"}
+                        </p>
+                        <div className="mt-2 text-xs text-slate-400 font-medium">
+                            {formatDuration(session.duration)} • {session.language === 'ko-KR' ? 'Korean' : 'English'}
+                        </div>
+                      </div>
+                    </div>
+                ))
+            )}
           </div>
         </div>
       </main>

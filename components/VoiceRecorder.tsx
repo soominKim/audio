@@ -5,6 +5,7 @@ import LandingView from "./LandingView";
 import RecordingView from "./RecordingView";
 import ResultView from "./ResultView";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
+import { RecordingSession } from "../types/recording";
 
 type AppState = 'idle' | 'recording' | 'paused' | 'processed';
 
@@ -13,7 +14,42 @@ const VoiceRecorder: React.FC = () => {
   const [language, setLanguage] = useState('ko-KR');
   const [fullTranscript, setFullTranscript] = useState('');
   const [timer, setTimer] = useState(0);
+  const [history, setHistory] = useState<RecordingSession[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Load history from local storage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('voiceRecHistory');
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error("Failed to parse history", e);
+      }
+    }
+  }, []);
+
+  const saveRecording = (transcript: string, duration: number) => {
+    if (!transcript.trim()) return;
+
+    const newSession: RecordingSession = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      transcript: transcript,
+      duration: duration,
+      language: language
+    };
+
+    const newHistory = [newSession, ...history];
+    setHistory(newHistory);
+    localStorage.setItem('voiceRecHistory', JSON.stringify(newHistory));
+  };
 
   const {
     isListening,
@@ -77,11 +113,16 @@ const VoiceRecorder: React.FC = () => {
     if (appState === 'recording' || appState === 'paused') {
       stopListening();
       setAppState('processed');
-      // If we were recording, add current transcript.
-      // If paused, we already added it.
+
+      // Calculate final transcript
+      let finalTranscript = fullTranscript;
       if (appState === 'recording') {
-         setFullTranscript(prev => (prev ? prev + ' ' : '') + currentTranscript);
+         finalTranscript = (finalTranscript ? finalTranscript + ' ' : '') + currentTranscript;
+         setFullTranscript(finalTranscript);
       }
+
+      // Save to history
+      saveRecording(finalTranscript, timer);
     }
   };
 
@@ -122,8 +163,10 @@ const VoiceRecorder: React.FC = () => {
       {appState === 'processed' && (
         <ResultView
           transcript={fullTranscript}
+          duration={formatTime(timer)}
           onNewRecording={handleNewRecording}
           language={language}
+          history={history}
         />
       )}
     </>
