@@ -34,6 +34,9 @@ export const useSpeechRecognition = (props: UseSpeechRecognitionProps = {}) => {
   const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const accumulatedRef = useRef(''); // Stores text from previous auto-restarted sessions
+  const currentSessionRef = useRef(''); // Stores text from current session
+  const isUserListeningRef = useRef(false); // Tracks if user wants to listen
 
   useEffect(() => {
     // Check browser support
@@ -54,16 +57,22 @@ export const useSpeechRecognition = (props: UseSpeechRecognitionProps = {}) => {
 
       for (let i = 0; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          final += event.results[i][0].transcript;
+          final += (final ? ' ' : '') + event.results[i][0].transcript;
         } else {
-          interim += event.results[i][0].transcript;
+          interim += (interim ? ' ' : '') + event.results[i][0].transcript;
         }
       }
 
-      setTranscript(final);
+      currentSessionRef.current = final;
+
+      // Combine accumulated + current final
+      const fullFinal = [accumulatedRef.current, final].filter(Boolean).join(' ');
+
+      setTranscript(fullFinal);
       setInterimTranscript(interim);
-      if (onResult && final) {
-        onResult(final);
+
+      if (onResult && fullFinal) {
+        onResult(fullFinal);
       }
     };
 
@@ -74,12 +83,26 @@ export const useSpeechRecognition = (props: UseSpeechRecognitionProps = {}) => {
           return;
       }
       setError(event.error);
-      setIsListening(false);
+      // Don't set isListening to false here, let onend handle it
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      if (onEnd) onEnd();
+      // If user still wants to listen, restart
+      if (isUserListeningRef.current) {
+          // Append current session to accumulated
+          accumulatedRef.current = [accumulatedRef.current, currentSessionRef.current].filter(Boolean).join(' ');
+          currentSessionRef.current = '';
+
+          try {
+              recognition.start();
+          } catch(e) {
+              console.log("Recognition restart failed", e);
+              setIsListening(false);
+          }
+      } else {
+          setIsListening(false);
+          if (onEnd) onEnd();
+      }
     };
 
     recognitionRef.current = recognition;
@@ -102,6 +125,10 @@ export const useSpeechRecognition = (props: UseSpeechRecognitionProps = {}) => {
     setError(null);
     setTranscript('');
     setInterimTranscript('');
+    accumulatedRef.current = '';
+    currentSessionRef.current = '';
+    isUserListeningRef.current = true;
+
     if (recognitionRef.current) {
       try {
         // Some browsers throw if already started
@@ -114,6 +141,7 @@ export const useSpeechRecognition = (props: UseSpeechRecognitionProps = {}) => {
   }, []);
 
   const stopListening = useCallback(() => {
+    isUserListeningRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       // isListening will be set to false in onend
@@ -121,6 +149,7 @@ export const useSpeechRecognition = (props: UseSpeechRecognitionProps = {}) => {
   }, []);
 
   const abortListening = useCallback(() => {
+      isUserListeningRef.current = false;
       if (recognitionRef.current) {
           recognitionRef.current.abort();
           setIsListening(false);

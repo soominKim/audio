@@ -39,7 +39,7 @@ const VoiceRecorder: React.FC = () => {
     if (!transcript.trim()) return;
 
     const newSession: RecordingSession = {
-      id: crypto.randomUUID(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
       date: new Date().toISOString(),
       transcript: transcript,
       duration: duration,
@@ -97,12 +97,9 @@ const VoiceRecorder: React.FC = () => {
     if (appState === 'recording') {
       setAppState('paused');
       stopListening();
-      // Add current session transcript to full transcript
-      // Note: currentTranscript is state from hook. It might not be immediately updated if onResult just fired.
-      // But typically it is.
-      // Actually, we should use the value from hook.
-      // But hook resets on start. So we must save it now.
-      setFullTranscript(prev => (prev ? prev + ' ' : '') + currentTranscript);
+      // Combine everything so far including interim results
+      const newFullTranscript = [fullTranscript, currentTranscript, interimTranscript].filter(Boolean).join(' ');
+      setFullTranscript(newFullTranscript);
     } else if (appState === 'paused') {
       setAppState('recording');
       startListening();
@@ -114,10 +111,10 @@ const VoiceRecorder: React.FC = () => {
       stopListening();
       setAppState('processed');
 
-      // Calculate final transcript
+      // Calculate final transcript including interim results which might not be finalized yet
       let finalTranscript = fullTranscript;
       if (appState === 'recording') {
-         finalTranscript = (finalTranscript ? finalTranscript + ' ' : '') + currentTranscript;
+         finalTranscript = [fullTranscript, currentTranscript, interimTranscript].filter(Boolean).join(' ');
          setFullTranscript(finalTranscript);
       }
 
